@@ -1,0 +1,13 @@
+<RCC>
+    <qresource prefix="/">
+        <file>tayarni.png</file>
+        <file>plane.png</file>
+        <file>ohotooo.qrc</file>
+        <file>eye.png</file>
+        <file>gif.gif</file>
+        <file>gif1.gif</file>
+        <file>gif2.gif</file>
+        <file>gif3.gif</file>
+        <file>gif4.gif</file>
+    </qresource>
+</RCC>

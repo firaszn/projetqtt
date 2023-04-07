@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/new/prefix1">
+        <file>1345874.png</file>
+        <file>3068380.png</file>
+        <file>PngItem_792657.png</file>
+        <file>update-icon.png</file>
+        <file>tayarni.png</file>
+    </qresource>
+</RCC>

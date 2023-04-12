@@ -1,621 +1,522 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include"employe.h"
-#include "stat_categorie.h"
-#include <QPdfWriter>
-#include <QPainter>
-#include <QDesktopServices>
-#include <QFileDialog>
-#include <QPushButton>
-#include<QString>
+#include <QSqlDatabase>
+#include <QString>
+#include <QDebug>
+#include <QTableWidget>
 #include <QSqlQuery>
-#include <QDebug>
 #include <QMessageBox>
+#include <QPdfWriter>
 #include <QIntValidator>
+#include <QCloseEvent>
 #include <QFileDialog>
 #include <QTextStream>
-#include <QPainter>
-#include <QTextStream>
-#include <QFileDialog>
 #include <QTextDocument>
-#include <QtPrintSupport/QPrinter>
+#include <QtCore/qmath.h>
+#include <qgraphicsitem.h>
+#include <map>
+#include "SMTPClient/email.h"
+#include "SMTPClient/emailaddress.h"
+#include "SMTPClient/smtpclient.h"
 #include <QFileDialog>
-#include <QTextDocument>
-#include <QSystemTrayIcon>
-#include <QRegExpValidator>
-#include <QDesktopServices>
-#include <QUrl>
-#include <QGuiApplication>
-//#include <QQmlApplicationEngine>
-#include <QTcpSocket>
-//#include <QQuickItem>
-#include <QSystemTrayIcon>
-#include <QIntValidator>
-#include <QDebug>
-#include "notification.h"
+#include <qdesktopservices.h>
 
-#include <QMessageBox>
-#include "QIntValidator"
-#include <QDateEdit>
-#include <QPlainTextEdit>
-#include <QPrinter>
-#include <QPrinterInfo>
-#include <QPrintDialog>
-#include <QTextStream>
-#include <QPainter>
-#include <QTextStream>
-#include <QFileDialog>
-#include <QTextDocument>
-#include <QtPrintSupport/QPrinter>
-#include <QFileDialog>
-#include <QTextDocument>
-#include <QSystemTrayIcon>
-#include <QRegExpValidator>
-#include <QDesktopServices>
-#include <QUrl>
-#include <QGuiApplication>
-//#include <QQmlApplicationEngine>
-#include <QTcpSocket>
-//#include <QQuickItem>
-#include <QSystemTrayIcon>
-#include <QIntValidator>
-//#include <QQmlApplicationEngine>
-#include <QTcpSocket>
-//#include <QQuickItem>
-#include <QSystemTrayIcon>
-#include <QPixmap>
-#include <QDesktopServices>
-#include <QImage>
-#include <QtCharts/QChartView>
-#include <QtCharts/QBarSeries>
-#include <QtCharts/QBarSet>
-#include <QtCharts/QLegend>
-#include <QtCharts/QBarCategoryAxis>
-#include <QtCharts/QHorizontalStackedBarSeries>
-#include <QtCharts/QLineSeries>
-#include <QtCharts/QCategoryAxis>
-#include <QtCharts/QPieSeries>
-#include <QtCharts/QPieSlice>
-MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
-    , ui(new Ui::MainWindow)
+
+
+
+Email MainWindow::createEmail()
+{
+    // Create the credentials EmailAddress
+    EmailAddress credentials("nourhene.ouhichi@esprit.tn",
+                             "ecikvjohchilpnmb");
+
+    // Create the from EmailAddress
+    EmailAddress from("nourhene.ouhichi@esprit.tn");
+
+    // Create the to EmailAddress
+    EmailAddress to(ui->to->text());
+
+    // Create the email
+    Email email(credentials,
+                from,
+                to,
+                ui->subjecy->text(),
+                ui->content->toPlainText());
+
+    return email;
+}
+
+//issmani f stat ma tnajmch taamlha nom(libelle) par rapport quantitee????? wlh manaaref kifeh ok
+
+
+MainWindow::MainWindow(QWidget *parent) :
+    QMainWindow(parent),
+    ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    //chat
-       mSocket=new QTcpSocket(this);
-           mSocket->connectToHost("localhost",2000);
-           if (mSocket->waitForConnected(3000))
-           {
-               ui->plainTextEdit_2->appendPlainText("se connecter correctement");
-           }
-           else
-           {
-               ui->plainTextEdit->appendPlainText("connected");
-           }
-           connect(mSocket,SIGNAL(readyRead()),this,SLOT(leer()));
-           // fin chat
-
-    ui->email->setValidator(new QRegExpValidator(QRegExp("[a-zA-Z,@,.]+"), parent));
-
-    ui->tableView->setModel(Etmp.afficher());
+    ui->id -> setValidator (new QIntValidator(0, 999999, this));
+    ui->libelle->setInputMask("aaaaaaaaaaaaaaaaaa");
+    ui->prix -> setValidator (new QIntValidator(0, 999999, this));
+    ui->quantite -> setValidator (new QIntValidator(0, 999999, this));
+    ui->id_services -> setValidator (new QIntValidator(0, 999999, this));
 
 
-    // Obtenez le QTabWidget
-    QTabWidget *tabWidget = ui->tabWidget_2;
-
-    // Changer le nom de la première colonne
-    tabWidget->setTabText(0, "crud ");
-    tabWidget->setTabText(1, "metiers ");
-    tabWidget->setTabText(2, "stat ");
-    tabWidget->setTabText(3, "chat box ");
-    tabWidget->setTabText(4, "arduino ");
-
-
+    QSqlDatabase db = QSqlDatabase::addDatabase("QODBC");
+    db.setDatabaseName("test-bd");
+    db.setUserName("nourhene");//inserer nom de l'utilisateur
+    db.setPassword("nourhene");//inserer mot de passe de cet utilisateur
+    if(db.open())qDebug()<< "opened the databs";
+    ui->tableView->setModel(print_table("stocks"));
+    ui->tableView_2->setModel(print_table("stocks"));
+    displaystatistiques(ui->graphicsView,"stocks","quantite");
+    ui->pushButton_4->hide();
+    ui->stackedWidget->setCurrentIndex(1);
+    ui->pushButton_8->hide();
 }
+
+
+void MainWindow::displaystatistiques(QGraphicsView* view,QString table,QString collumn){
+    // Create a scene and add it to the view
+       QGraphicsScene* scene = new QGraphicsScene();
+       view->setScene(scene);
+
+       // Query the database to get the data for the chart
+       QSqlQuery query("SELECT "+collumn+" FROM "+table);
+
+
+       // Count the number of occurrences of each type
+       QMap<QString, int> typeCounts;
+       while (query.next()) {
+           QString type = query.value(0).toString();
+
+           if (typeCounts.contains(type)) {
+               typeCounts[type]++;
+           } else {
+               typeCounts.insert(type, 1);
+           }
+       }
+
+       // Calculate the total count of all types
+       int totalCount = 0;
+       QMap<QString, int>::const_iterator i;
+       for (i = typeCounts.constBegin(); i != typeCounts.constEnd(); ++i) {
+           totalCount += i.value();
+       }
+
+       // Set up the colors for the chart slices
+       QColor colors[] = {
+           Qt::red,
+           Qt::green,
+           Qt::blue,
+           Qt::yellow,
+           Qt::cyan,
+           Qt::magenta,
+           Qt::gray,
+       };
+       int numColors = sizeof(colors) / sizeof(colors[0]);
+
+       // Set up the chart parameters
+       QRectF rect(50, 50, 200, 200);
+       qreal startAngle = 0;
+           QFont font("Arial", 12);
+           QFontMetrics fm(font);
+           qreal labelRadius = rect.width() * 0.5 + fm.height();
+       // Draw the chart slices
+       int colorIndex = 0;
+       for (i = typeCounts.constBegin(); i != typeCounts.constEnd(); ++i) {
+           QString type = i.key();
+           int count = i.value();
+           qreal angle = 360.0 * count / totalCount;
+
+           // Set up the brush and pen for the slice
+           QBrush brush(colors[colorIndex % numColors]);
+           QPen pen(colors[colorIndex % numColors]);
+           pen.setWidth(2);
+
+           // Draw the slice
+           QPainterPath path;
+           path.moveTo(rect.center());
+           path.arcTo(rect, startAngle, angle);
+           path.lineTo(rect.center());
+           path.closeSubpath();
+           QGraphicsPathItem* item = scene->addPath(path, pen, brush);
+           item->setToolTip(type + ": " + QString::number(count));
+
+           // Draw the label for the slice
+                   qreal labelAngle = startAngle + angle / 2.0;
+                   qreal x = rect.center().x() + labelRadius * qCos(labelAngle * M_PI / 180.0) - fm.width(type) / 2.0;
+
+                   qreal y = rect.center().y() - labelRadius * qSin(labelAngle * M_PI / 180.0) - fm.height() / 2.0;
+                   QGraphicsTextItem* label = new QGraphicsTextItem(type);
+                   label->setPos(x, y);
+                   scene->addItem(label);
+
+           // Update the start angle for the next slice
+           startAngle += angle;
+           colorIndex++;
+       }
+
+       // Set the view's background color
+       view->setBackgroundBrush(QColor(240, 240, 240));
+
+       // Set the scene rectangle and view alignment
+       scene->setSceneRect(QRectF(0, 0, 300, 300));
+       view->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    }
+
+QSqlQueryModel * MainWindow::search_table(QString table ,QString search) {
+  QSqlQueryModel * model = new QSqlQueryModel();
+  if(search=="")model -> setQuery("Select * from " + table);
+  else
+  model -> setQuery("Select * from " + table+" WHERE LIBELLE LIKE '%"+search+"%';");
+  ui -> tableView -> setModel(model);
+  return model;
+}
+QSqlQueryModel * MainWindow::sortbyup(QString table) {
+  QSqlQueryModel * model = new QSqlQueryModel();
+  model -> setQuery("Select * from " + table+" ORDER BY ID ASC");
+  ui -> tableView -> setModel(model);
+  return model;
+}
+QSqlQueryModel * MainWindow::sortbydown(QString table) {
+  QSqlQueryModel * model = new QSqlQueryModel();
+  model -> setQuery("Select * from " + table+" ORDER BY ID DESC");
+  ui -> tableView -> setModel(model);
+  return model;
+}
+
 
 MainWindow::~MainWindow()
 {
     delete ui;
 }
 
-
 void MainWindow::on_pushButton_clicked()
 {
-       bool test1=true;
-       QString nom = ui->nom->text();
-       QString prenom=ui->prenom->text();
-       QString poste=ui->poste->currentText();
-       int salaire=ui->salaire->text().toInt();
-       QString email=ui->email->text();
-       QString mdp = ui->mdp->text();
-       QString role=ui->role->currentText();
-       QString etat=ui->etat->currentText();
-       QRegExp re("\\d*");
-       if (!re.exactMatch(ui->salaire->text())){
-          qDebug() << "salaire not digits";
-          test1=false;}
+    // Get the selection model of the table view
+    QItemSelectionModel *selectionModel = ui->tableView->selectionModel();
 
-       if(!re.exactMatch(ui->cin->text())){
-           qDebug() << "cin not digits";
-          test1=false;}
-       for(int i=0;i<prenom.length();i++){
-       if(re.exactMatch(prenom.at(i))){
-           test1=false;
-           qDebug()<< "prenom digit";
-       }
-       }
-       for(int i=0;i<nom.length();i++){
-       if(re.exactMatch(nom.at(i))){
-           test1=false;
-           qDebug()<< "nom digit";
-       }
-       }
-       for(int i=0;i<poste.length();i++){
-       if(re.exactMatch(poste.at(i))){
-           test1=false;
-           qDebug()<< "poste digit";
-       }
-       }
+    // Get the currently selected indexes
+    QModelIndexList selectedIndexes = selectionModel->selectedIndexes();
 
+    // Extract the primary keys of the selected rows
+    QList<int> primaryKeys;
+    foreach (const QModelIndex &index, selectedIndexes) {
+        if (index.column() == 0) {
+            primaryKeys.append(index.data().toInt());
+        }
+    }
 
-            int cin = ui->cin->text().toInt();
-bool test;
-           if(test1){
-           employe e (cin,nom,prenom,poste,salaire,email,mdp,role,etat);
-            test = e.ajouter();
-           }else{ qDebug()<<"wrong input";test=false; };
-
-
-
-
-         if( test){
-             ui->tableView->setModel(Etmp.afficher());
-
-
-              QMessageBox::information(nullptr, QObject::tr("ok"),
-                          QObject::tr("ajout effectué .\n"
-                                      "Click Cancel to exit."), QMessageBox::Cancel);
-              ui->cin->clear();
-                             ui->nom->clear();
-                             ui->prenom->clear();
-                             ui->salaire->clear();
-                             ui->email->clear();
-                             ui->mdp->clear();
-
-                             notification ok;
-
-                             if(ui->etat->currentText()=="present"){
-                             ok.notification_presence();
-                             }
-                             else if(ui->etat->currentText()=="absent"){
-                                 ok.notification_absence();
-                                 }
-
-
-
-
-      }
-          else
-              QMessageBox::critical(nullptr, QObject::tr("not ok"),
-                          QObject::tr("ajout non effectué .\n"
-                                      "Click Cancel to exit."), QMessageBox::Cancel);
+    // Delete the selected rows from the SQL table
+    QSqlQuery query;
+    int primaryKey;
+    foreach (primaryKey, primaryKeys) {
+        query.prepare("DELETE FROM NOURHENE.STOCKS WHERE id = :id;");}
+        qDebug() << primaryKey;
+        query.bindValue(":id", primaryKey);
+        if(!query.exec())QMessageBox::information(this, "Information", "erreur delete"); else QMessageBox::information(this, "Information", "delete done");
+        ui->tableView->setModel(print_table("stocks"));
 }
-
-
-
-void MainWindow::on_supprimer_clicked()
-{
-    int cin = ui->cin->text().toInt();
-
-             bool test = Etmp.supprimer(cin);
-
-        if (test)
-        {
-
-
-
-              QMessageBox::information(nullptr, QObject::tr("ok"),
-                          QObject::tr("suppression effectué .\n"
-                                      "Click Cancel to exit."), QMessageBox::Cancel);
-
-
-              ui->tableView->setModel(Etmp.afficher());
-
-              ui->cin->clear();
-                             ui->nom->clear();
-                             ui->prenom->clear();
-                             ui->salaire->clear();
-                             ui->email->clear();
-                             ui->mdp->clear();
-
-
-
-
-
-
-
-      }
-          else
-              QMessageBox::critical(nullptr, QObject::tr("not ok"),
-                          QObject::tr("suppression non effectué .\n"
-                                      "Click Cancel to exit."), QMessageBox::Cancel);
-
-
-}
-
-
-
-
-
-
-
-void MainWindow::on_rechercher_clicked()
-{
-
-    QString cas = ui->lineEditcin->text();
-
-
-            ui->tableView_2->setModel(Etmp.recherche( cas));
-
-
-}
-
-
-
-void MainWindow:: on_radioButton_clicked()
-{
-
-
-    ui->tableView_2->setModel(Etmp.tricin());
-
-
-}
-
-
-
-void MainWindow::on_pdf_clicked()
-{
-    QPdfWriter pdf(qApp->applicationDirPath()+"//listeemployee.pdf");
-
-       QPainter painter(&pdf);
-
-
-
-       int i = 4000;
-
-
-                        painter.drawText(4500,1500,"LISTE DES EMPLOYEE");
-                        painter.setPen(Qt::blue);
-                        painter.setFont(QFont("Arial", 50));
-                        painter.drawRect(2000,200,6300,2600);
-                        painter.setPen(Qt::black);
-
-
-
-                        QSqlQuery query;
-                        query.prepare("select * from employee");
-                        query.exec();
-                        while (query.next())
-
-                        {
-                            painter.setPen(Qt::red);
-                            painter.setPen(Qt::black);
-                            painter.setFont(QFont("Arial", 9));
-                            painter.drawRect(-50,1000+i,3600,2500);
-                            painter.drawText(0,1300+i,"CIN");
-                            painter.drawText(0,1600+i,"NOM");
-                            painter.drawText(0,1900+i,"PRENOM");
-                            painter.drawText(0,2200+i,"POSTE");
-                            painter.drawText(0,2500+i,"SALAIRE");
-                            painter.drawText(0,2800+i,"EMAIL");
-                            painter.drawText(0,3100+i,"MDP");
-                            painter.drawText(0,3400+i,"ROLE");
-                            painter.drawText(0,3700+i,"ETAT");
-
-
-
-                            painter.drawText(1600,1300+i,query.value(0).toString());
-                            painter.drawText(1600,1600+i,query.value(1).toString());
-                            painter.drawText(1600,1900+i,query.value(2).toString());
-                            painter.drawText(1600,2200+i,query.value(3).toString());
-                            painter.drawText(1600,2500+i,query.value(4).toString());
-                            painter.drawText(1600,2800+i,query.value(5).toString());
-                            painter.drawText(1600,3100+i,query.value(6).toString());
-                            painter.drawText(1600,3400+i,query.value(7).toString());
-                            painter.drawText(1600,3700+i,query.value(8).toString());
-
-
-                            i = i +3000;
-                        }
-
-                        int reponse = QMessageBox::question(this, "PDF généré", "Afficher le PDF ?", QMessageBox::Yes |  QMessageBox::No);
-                        if (reponse == QMessageBox::Yes)
-                        {
-                            QDesktopServices::openUrl(QUrl::fromLocalFile(qApp->applicationDirPath()+"//listeemployee.pdf"));
-
-                            painter.end();
-                        }
-                        if (reponse == QMessageBox::No)
-                        {
-                            painter.end();
-                        }
-
-
-
-
-}
-
-void MainWindow::on_tableView_clicked(const QModelIndex &index)
-{
-    QString val=ui->tableView->model()->data(index).toString();
-        QSqlQuery qry;
-        qry.prepare("select * from employee where cin='"+val+"'");
-       if (qry.exec())
-       {
-           while(qry.next())
-           {
-              ui->cin->setText(qry.value(0).toString());
-              ui->nom->setText(qry.value(1).toString());
-
-              ui->prenom->setText(qry.value(2).toString());
-              ui->poste->setCurrentText(qry.value(3).toString());
-              ui->salaire->setText(qry.value(4).toString());
-
-               ui->email->setText(qry.value(5).toString());
-               ui->mdp->setText(qry.value(6).toString());
-
-               ui->role->setCurrentText(qry.value(7).toString());
-
-                ui->etat->setCurrentText(qry.value(8).toString());
-
-
-
-           }
-       }
-       else
-       {
-           QMessageBox::critical(nullptr,QObject::tr("NOT OK"),
-                   QObject::tr("Echec"),
-                   QMessageBox::Cancel);
-       }
-
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-void MainWindow::on_pushButton_2_clicked()
-{
-    int cin = ui->cin->text().toInt();
-    QString nom = ui->nom->text();
-    QString prenom=ui->prenom->text();
-    QString poste=ui->poste->currentText();
-    int salaire=ui->salaire->text().toInt();
-    QString email=ui->email->text();
-    QString mdp = ui->mdp->text();
-    QString role=ui->role->currentText();
-    QString etat=ui->etat->currentText();
-
-
-       bool test;
-      employe e (cin,nom,prenom,poste,salaire,email,role,etat,mdp);
-      test = e.modifier();
-
-
-
-      if( test){
-
-
-              QMessageBox::information(nullptr, QObject::tr("ok"),
-                          QObject::tr("modification effectué .\n"
-                                      "Click Cancel to exit."), QMessageBox::Cancel);
-              ui->tableView->setModel(Etmp.afficher());
-
-              ui->cin->clear();
-                             ui->nom->clear();
-                             ui->prenom->clear();
-                             ui->salaire->clear();
-                             ui->email->clear();
-                             ui->mdp->clear();
-
-
-
-
-
-
-
-
-
-
-      }
-          else
-              QMessageBox::critical(nullptr, QObject::tr("not ok"),
-                          QObject::tr("modification non effectué .\n"
-                                      "Click Cancel to exit."), QMessageBox::Cancel);
-}
-
-
 
 
 void MainWindow::on_pushButton_3_clicked()
 {
-
- QString username1 = ui->username1->text();
- QString message = QString("%1: %2").arg(username1).arg(ui->write1->text());
-    mSocket->write(message.toLatin1().data(), message.size());
-    ui->plainTextEdit->appendPlainText(message);
-
-       ui->write1->clear();
-
+    QString id1=ui->id->text();
+    QString quantite1=ui->quantite->text();
+    QString prix1=ui->prix->text();
+    QString id_services1=ui->id_services->text();
+    QString libelle1=ui->libelle->text();
+    QString error;
+    bool test1=true;
+    QRegExp re("\\d*");
+    if (!re.exactMatch(id1)){
+           error = "id not digits";test1=false;}
+        if(!re.exactMatch(prix1)){
+            error = "prix not digits";
+           test1=false;}
+        if(!re.exactMatch(quantite1)){
+            error = "quantite not digits";
+           test1=false;}
+        if(!re.exactMatch(id_services1)){
+            error = "id services not digits";
+           test1=false;}
+        for(int i=0;i<libelle1.length();i++){
+        if(re.exactMatch(libelle1.at(i))){
+            test1=false;
+            error = "libelle non chaine";
+        }
     }
+         int id = id1.toInt();
+         int quantite = quantite1.toInt();
+         int id_services=id_services1.toInt();
+         int prix = prix1.toInt();
+
+        if(test1){QSqlQuery qry;
+            qry.prepare("INSERT INTO NOURHENE.STOCKS ( ID ,LIBELLE, PRIX, QUANTITE, ID_SERVICE) VALUES (:id, :libelle, :prix, :quantite, :idservice)");
+            qry.bindValue(":id",id);
+            qry.bindValue(":libelle",libelle1);
+            qry.bindValue(":prix",prix);
+            qry.bindValue(":quantite",quantite);
+            qry.bindValue(":idservice",id_services);
+            qDebug() << id_services<< id<<libelle1<<quantite<<prix;
+            if(!qry.exec())QMessageBox::information(this, "Information", "execution erreur");
+            //add table header
+            ui->tableView->setModel(print_table("STOCKS"));
+            QMessageBox::information(this, "Information", "ajout done");
+        }else{ QMessageBox::information(this, "Information", error); };
+        ui->tableView->setModel(print_table("stocks"));
+
+}
+
+
+void MainWindow::on_pushButton_2_clicked()
+{
+    QString id1=ui->id->text();
+    QString quantite1=ui->quantite->text();
+    QString prix1=ui->prix->text();
+    QString id_services1=ui->id_services->text();
+    QString libelle1=ui->libelle->text();
+    QString error;
+    bool test1=true;
+    QRegExp re("\\d*");
+    if (!re.exactMatch(id1)){
+           error = "id not digits";test1=false;}
+        if(!re.exactMatch(prix1)){
+            error = "prix not digits";
+           test1=false;}
+        if(!re.exactMatch(quantite1)){
+            error = "quantite not digits";
+           test1=false;}
+        if(!re.exactMatch(id_services1)){
+            error = "id services not digits";
+           test1=false;}
+        for(int i=0;i<libelle1.length();i++){
+        if(re.exactMatch(libelle1.at(i))){
+            test1=false;
+            error = "libelle non chaine";
+        }
+    }
+         int id = id1.toInt();
+         int quantite = quantite1.toInt();
+         int id_services=id_services1.toInt();
+         int prix = prix1.toInt();
+
+        if(test1){QSqlQuery qry;
+            qry.prepare("UPDATE STOCKS SET LIBELLE= :libelle, PRIX=:prix,QUANTITE= :quantite ,ID_SERVICE= :idservice where id= :id");
+            qry.bindValue(":id",id);
+            qry.bindValue(":libelle",libelle1);
+            qry.bindValue(":prix",prix);
+            qry.bindValue(":quantite",quantite);
+            qry.bindValue(":idservice",id_services);
+            qDebug() << id_services<< id<<libelle1<<quantite<<prix;
+            if(!qry.exec())QMessageBox::information(this, "Information", "execution erreur");else QMessageBox::information(this, "Information", "modifier done");
+            //add table header
+            ui->tableView->setModel(print_table("STOCKS"));
+        }else{ QMessageBox::information(this, "Information", error); };
+        ui->tableView->setModel(print_table("stocks"));
+}
+
+void MainWindow::on_tableView_doubleClicked(const QModelIndex &index)
+{
+    if (index.isValid())
+        {
+            QVariant data = ui->tableView->model()->data(index);
+            QString id = ui->tableView->model()->data(ui->tableView->model()->index(index.row(), 0)).toString();
+            QString type = ui->tableView->model()->data(ui->tableView->model()->index(index.row(), 1)).toString();
+            QString montant = ui->tableView->model()->data(ui->tableView->model()->index(index.row(), 2)).toString();
+            QString date = ui->tableView->model()->data(ui->tableView->model()->index(index.row(), 3)).toString().left(10);
+            QString id_mat = ui->tableView->model()->data(ui->tableView->model()->index(index.row(), 4)).toString();
+            qDebug() << "Double-clicked on row " << index.row() << " with data: " << id << "First Name: " << montant << "Last Name: " << date;
+            ui->id->setText(id);
+            ui->libelle->setText(type);
+            ui->prix->setText(montant);
+            ui->quantite->setText(date);
+            ui->id_services->setText(id_mat);
+}
+}
 
 void MainWindow::on_pushButton_4_clicked()
 {
-    QString username2 = ui->username2->text();
-    QString message = QString("%1: %2").arg(username2).arg(ui->write2->text());
-       mSocket->write(message.toLatin1().data(), message.size());
-       ui->plainTextEdit_2->appendPlainText(message);
-
-
-
-       ui->write2->clear();
-
+    if(ui->stackedWidget->currentIndex()==2){
+        ui->stackedWidget->setCurrentIndex(0);
+    }
+    else ui->stackedWidget->setCurrentIndex(2);
+    ui->tableView_2->setModel(print_table("stocks"));
+    displaystatistiques(ui->graphicsView,"stocks","prix");
 }
+
+void MainWindow::generatePdfFile(QString path,QString collumn1,QString collumn2,QString collumn3,QString collumn4,QString collumn5, QString budget, QString date, QString id, QString type, QString condition)
+{
+    // Create a QPdfWriter object with the specified path
+    QPdfWriter pdfWriter(path);
+    QPainter painter(&pdfWriter);
+
+    // Set the page size and orientation
+    pdfWriter.setPageSize(QPageSize(QPageSize::A4));
+    pdfWriter.setPageOrientation(QPageLayout::Portrait);
+
+    // Draw the contents of the PDF file
+        int y = 100;
+        painter.drawText(100, y, collumn1+": " + budget);
+        y += 200; // Add spacing between the lines
+        painter.drawText(100, y, collumn2+": " + date);
+        y += 200; // Add spacing between the lines
+        painter.drawText(100, y, collumn3+ ": " + id);
+        y += 200; // Add spacing between the lines
+        painter.drawText(100, y, collumn4+": " + type);
+        y += 200; // Add spacing between the lines
+        painter.drawText(100, y, collumn5+": " + condition);
+
+    // Finish painting
+    painter.end();
+}
+
 
 void MainWindow::on_pushButton_5_clicked()
 {
-    QPixmap screen_shot = ui->tableView->grab();
-            QImage img = screen_shot.toImage();
-            img.save("Capture.png");
-              QDesktopServices::openUrl(QUrl("Capture.png"));
+    QString dir = QFileDialog::getExistingDirectory(this, tr("Open Directory"),
+                                                                   "/home",
+                                                                   QFileDialog::ShowDirsOnly
+                                                                   | QFileDialog::DontResolveSymlinks);
+                       qDebug()<<dir;
+                       QPdfWriter pdf(dir+"/PdfList.pdf");
+                                              QPainter painter(&pdf);
+                                             int i = 4000;
+                                             // Load the logo image from a file
+                                             QImage logoImage("C:\\Users\\nourh\\Desktop\\nourhene\\logo.jpg");
+                                             QPixmap logoPixmap = QPixmap::fromImage(logoImage);
+                                             logoPixmap = logoPixmap.scaled(1500, 1500, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+                                             // Draw the logo in the top right corner
+                                             int logoX = pdf.width() - logoPixmap.width();
+                                             int logoY = 50;
+                                             painter.drawPixmap(logoX, logoY, logoPixmap);
+                                         painter.drawPixmap(QRect(100,100,2000,2000),QPixmap(""));
+                                                 painter.drawText(900,650,"nourhene ouhichi");
+
+                                                 // painter.drawPixmap(QRect(7600,100,2100,2700),QPixmap("C:/Users/Admin/Desktop/logo.png"));
+
+                                                  painter.setPen(Qt::blue);
+                                                  painter.setFont(QFont("Time New Roman", 25));
+                                                  painter.drawText(3000,1400,"Liste Des stocks");
+                                                  painter.setPen(Qt::black);
+                                                  painter.setFont(QFont("Time New Roman", 15));
+                                                  painter.drawRect(100,100,9400,2500);
+                                                  painter.drawRect(100,3000,9400,500);
+                                                  painter.setFont(QFont("Time New Roman", 9));
+                                                  painter.drawText(300,3300,"id");
+                                                  painter.drawText(2300,3300,"libelle");
+                                                  painter.drawText(4300,3300,"prix");
+                                                  painter.drawText(6300,3300,"quantité");
+                                                  painter.drawText(7500,3300,"id-service");
+                                               //painter.drawText(8400,3300,"poids ");
+                                                //  painter.drawText(9500,3300,"Date Retour");
+                                                  //painter.drawText(10500,3300,"Date Naissance");
+
+                                                  painter.drawRect(100,3000,9400,10700);
+
+
+                                                  QTextDocument previewDoc;
+                                                  QString pdflist = QDate::currentDate().toString("'data_'MM_dd_yyyy'.txt'");
+
+
+                                                  QTextCursor cursor(&previewDoc);
+
+
+
+                                                  QSqlQuery query;
+                                                  query.prepare("select * from STOCKS");
+                                                  query.exec();
+                                                  while (query.next())
+                                                  {
+                                                      painter.drawText(300,i,query.value(0).toString());
+                                                      painter.drawText(2300,i,query.value(1).toString());
+                                                      painter.drawText(4300,i,query.value(2).toString());
+                                                      painter.drawText(6300,i,query.value(3).toString());
+                                                      painter.drawText(7500,i,query.value(4).toString());
+                                                      painter.drawText(8500,i,query.value(5).toString());
+                                                     // painter.drawText(9500,i,query.value(6).toString());
+                                                     // painter.drawText(10500,i,query.value(7).toString());*/
+
+
+
+
+                                                     i = i +500;
+                                                  }
+                                                  int reponse = QMessageBox::question(this, "Générer PDF", "<PDF Enregistré>...Vous Voulez Affichez Le PDF ?",
+                                                                                      QMessageBox::Yes|QMessageBox::No);
+                                                      if (reponse == QMessageBox::Yes)
+                                                      {
+                                                          QDesktopServices::openUrl(QUrl::fromLocalFile(dir+"/PdfList.pdf"));
+
+                                                          painter.end();
+                                                      }
+                                                      else
+                                                      {
+                                                           painter.end();
+             }
 }
 
 
 
-void MainWindow::on_chat_clicked()
+void MainWindow::on_pushButton_6_clicked()
 {
-    if (ui->tabWidget_2->count() > 1) {
-              ui->tabWidget_2->setCurrentIndex( (ui->tabWidget_2->currentIndex()+2) % ui->tabWidget_2->count() );
-           }
-
+    ui->tableView->setModel(search_table("stocks",ui->lineEdit->text()));
 }
 
-void MainWindow::on_stat_clicked()
+void MainWindow::on_toolButton_clicked()
 {
-
-    vector<QString> liste_cat;
-    vector<qreal> count;
-    QSqlQuery q1,q2;
-    qreal tot=0,c;
-    q1.prepare("SELECT DISTINCT poste FROM employee");
-    q1.exec();
-    while (q1.next()){
-        liste_cat.push_back(q1.value(0).toString());
-    }
-
-    q1.prepare("SELECT * FROM employee");
-    q1.exec();
-    while (q1.next()){
-        tot++;
-    }
-
-    for (auto i = liste_cat.begin(); i != liste_cat.end(); ++i) {
-         q2.prepare("SELECT * FROM employee where poste = :m");
-         q2.bindValue(":m", *i);
-         q2.exec();
-         c=0;
-         while (q2.next()){c++;}
-         count.push_back(c/tot);
-
-    }
-
-
-// Define slices and percentage of whole they take up
-QPieSeries *series = new QPieSeries();
-
-for(unsigned int i = 0; i < liste_cat.size(); i++){
-    QString label = QString("%1 (%2%)").arg(liste_cat[i]).arg(QString::number(count[i] * 100, 'f', 2));
-    series->append(label, count[i]);
+    ui->tableView->setModel(sortbyup("stocks"));
 }
 
-
-
-
-// Create the chart widget
-QChart *chart = new QChart();
-
-// Add data to chart with title and show legend
-chart->addSeries(series);
-chart->legend()->show();
-chart->setTitle("statistiques par poste ");
-
-
-
-// Used to display the chart
- QChartView *chartView ;
-chartView = new QChartView(chart,ui->label_3);
-chartView->setRenderHint(QPainter::Antialiasing);
-chartView->setMinimumSize(600,600);
-
-chartView->show();
-if (ui->tabWidget_2->count() > 1) {
-          ui->tabWidget_2->setCurrentIndex( (ui->tabWidget_2->currentIndex()+1) % ui->tabWidget_2->count() );
-       }
-}
-
-
-
-
-
-void MainWindow::on_gotometiers_clicked()
+void MainWindow::on_toolButton_2_clicked()
 {
-    if (ui->tabWidget_2->count() > 1) {
-              ui->tabWidget_2->setCurrentIndex( (ui->tabWidget_2->currentIndex()+1) % ui->tabWidget_2->count() );
-           }
-
-
-}
-
-void MainWindow::on_back_2_clicked()
-{
-    if (ui->tabWidget_2->count() > 1) {
-        ui->tabWidget_2->setCurrentIndex( (ui->tabWidget_2->currentIndex()-1) % ui->tabWidget_2->count() );
-     }
-
-}
-
-void MainWindow::on_back_clicked()
-{
-    if (ui->tabWidget_2->count() > 1) {
-              ui->tabWidget_2->setCurrentIndex( (ui->tabWidget_2->currentIndex()-1) % ui->tabWidget_2->count() );
-           }
-
-}
-
-void MainWindow::on_back_3_clicked()
-{
-    if (ui->tabWidget_2->count() > 1) {
-        ui->tabWidget_2->setCurrentIndex( (ui->tabWidget_2->currentIndex()-1) % ui->tabWidget_2->count() );
-     }
-
-}
-void MainWindow::on_back_4_clicked()
-{
-    if (ui->tabWidget_2->count() > 1) {
-        ui->tabWidget_2->setCurrentIndex( (ui->tabWidget_2->currentIndex()-1) % ui->tabWidget_2->count() );
-     }
-
-
-}
-
-
-void MainWindow::on_pushButton_9_clicked()
-{
-
+    ui->tableView->setModel(sortbydown("stocks"));
 }
 
 void MainWindow::on_pushButton_7_clicked()
 {
+    QMap<QString, QString> users;
 
+    // Execute a SELECT query on the login table
+    QSqlQuery query("SELECT users, password FROM login");
+
+    // Retrieve the values of the users and password columns and add them to the QMap
+    while (query.next()) {
+        QString user = query.value(0).toString();
+        QString password = query.value(1).toString();
+        users.insert(user, password);
+    }
+
+    if(users.count(ui->lineEdit_2->text()) && users[ui->lineEdit_2->text()] == ui->lineEdit_3->text()){
+        ui->pushButton_4->show();
+        ui->stackedWidget->setCurrentIndex(0);
+        ui->pushButton_8->show();
+    }
+    else ui->label_9->setText("echec de login");
 }
 
 void MainWindow::on_pushButton_8_clicked()
 {
-
+    if(ui->stackedWidget->currentIndex()==3)ui->stackedWidget->setCurrentIndex(0);else
+    ui->stackedWidget->setCurrentIndex(3);
 }
 
-void MainWindow::on_pushButton_6_clicked()
+void MainWindow::on_pushButton_9_clicked()
 {
+    // Create the credentials EmailAddress
+    EmailAddress credentials("nourhene.ouhichi@esprit.tn",
+                             "snuxbcchojyaealm");
 
+    // Create the email object
+    Email email = createEmail();
+
+    // Create the SMTPClient
+    SMTPClient* client = new SMTPClient("smtp.gmail.com",
+                             465);
+
+    // Try to send the email
+    client->sendEmail(email);
+
+    QMessageBox::information(this, "Information", "message envoyée");
 }
-

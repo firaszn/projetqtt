@@ -1,0 +1,15 @@
+INPUT(
+./debug/main.o
+./debug/mainwindow.o
+./debug/qemail.o
+./debug/qmimeattach.o
+./debug/qmimemultipart.o
+./debug/qmimeobject.o
+./debug/qmimetext.o
+./debug/nourhene.o
+./debug/qsmtp.o
+./debug/qsmtpresponse.o
+./debug/qrc_resource.o
+./debug/moc_mainwindow.o
+./debug/moc_qsmtp.o
+);
